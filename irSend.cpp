@@ -4,15 +4,15 @@
 //+=============================================================================
 void  IRsend::sendRaw (const unsigned int buf[],  unsigned int len,  unsigned int hz)
 {
-	// Set IR carrier frequency
-	enableIROut(hz);
+    // Set IR carrier frequency
+    enableIROut(hz);
 
-	for (unsigned int i = 0;  i < len;  i++) {
-		if (i & 1)  space(buf[i]) ;
-		else        mark (buf[i]) ;
-	}
+    for (unsigned int i = 0;  i < len;  i++) {
+        if (i & 1)  space(buf[i]) ;
+        else        mark (buf[i]) ;
+    }
 
-	space(0);  // Always end with the LED off
+    space(0);  // Always end with the LED off
 }
 
 //+=============================================================================
@@ -21,8 +21,13 @@ void  IRsend::sendRaw (const unsigned int buf[],  unsigned int len,  unsigned in
 //
 void  IRsend::mark (unsigned int time)
 {
-	TIMER_ENABLE_PWM; // Enable pin 3 PWM output
-	if (time > 0) custom_delay_usec(time);
+    // TIMER_ENABLE_PWM; // Enable pin 3 PWM output
+#ifdef ESP32
+    ledcWrite(LEDCHANNEL, 50);
+#else
+    TIMER_ENABLE_PWM; // Enable pin 3 PWM output
+#endif
+    if (time > 0) custom_delay_usec(time);
 }
 
 //+=============================================================================
@@ -32,8 +37,13 @@ void  IRsend::mark (unsigned int time)
 //
 void  IRsend::space (unsigned int time)
 {
-	TIMER_DISABLE_PWM; // Disable pin 3 PWM output
-	if (time > 0) IRsend::custom_delay_usec(time);
+    // TIMER_DISABLE_PWM; // Disable pin 3 PWM output
+#ifdef ESP32
+    ledcWrite(LEDCHANNEL, 0);
+#else
+    TIMER_DISABLE_PWM; // Disable pin 3 PWM output
+#endif
+    if (time > 0) IRsend::custom_delay_usec(time);
 }
 
 
@@ -56,35 +66,39 @@ void  IRsend::enableIROut (int khz)
 {
 // FIXME: implement ESP32 support, see IR_TIMER_USE_ESP32 in boarddefs.h
 #ifndef ESP32
-	// Disable the Timer2 Interrupt (which is used for receiving IR)
-	TIMER_DISABLE_INTR; //Timer2 Overflow Interrupt
+    // Disable the Timer2 Interrupt (which is used for receiving IR)
+    TIMER_DISABLE_INTR; //Timer2 Overflow Interrupt
 
-	pinMode(TIMER_PWM_PIN, OUTPUT);
-	digitalWrite(TIMER_PWM_PIN, LOW); // When not sending PWM, we want it low
+    pinMode(TIMER_PWM_PIN, OUTPUT);
+    digitalWrite(TIMER_PWM_PIN, LOW); // When not sending PWM, we want it low
 
-	// COM2A = 00: disconnect OC2A
-	// COM2B = 00: disconnect OC2B; to send signal set to 10: OC2B non-inverted
-	// WGM2 = 101: phase-correct PWM with OCRA as top
-	// CS2  = 000: no prescaling
-	// The top value for the timer.  The modulation frequency will be SYSCLOCK / 2 / OCR2A.
-	TIMER_CONFIG_KHZ(khz);
+    // COM2A = 00: disconnect OC2A
+    // COM2B = 00: disconnect OC2B; to send signal set to 10: OC2B non-inverted
+    // WGM2 = 101: phase-correct PWM with OCRA as top
+    // CS2  = 000: no prescaling
+    // The top value for the timer.  The modulation frequency will be SYSCLOCK / 2 / OCR2A.
+    TIMER_CONFIG_KHZ(khz);
+#else
+    ledcSetup(LEDCHANNEL, khz * 1000, 8);
+    ledcAttachPin(timerPwmPin, LEDCHANNEL);
 #endif
 }
 
 //+=============================================================================
 // Custom delay function that circumvents Arduino's delayMicroseconds limit
 
-void IRsend::custom_delay_usec(unsigned long uSecs) {
-  if (uSecs > 4) {
-    unsigned long start = micros();
-    unsigned long endMicros = start + uSecs - 4;
-    if (endMicros < start) { // Check if overflow
-      while ( micros() > start ) {} // wait until overflow
+void IRsend::custom_delay_usec(unsigned long uSecs)
+{
+    if (uSecs > 4) {
+        unsigned long start = micros();
+        unsigned long endMicros = start + uSecs - 4;
+        if (endMicros < start) { // Check if overflow
+            while ( micros() > start ) {} // wait until overflow
+        }
+        while ( micros() < endMicros ) {} // normal wait
     }
-    while ( micros() < endMicros ) {} // normal wait
-  } 
-  //else {
-  //  __asm__("nop\n\t"); // must have or compiler optimizes out
-  //}
+    //else {
+    //  __asm__("nop\n\t"); // must have or compiler optimizes out
+    //}
 }
 
