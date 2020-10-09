@@ -116,6 +116,15 @@ IRrecv::IRrecv (int recvpin, int blinkpin)
 }
 
 
+void IRrecv::disableIRIn()
+{
+// Initialize state machine variables
+    irparams.rcvstate = STATE_IDLE;
+    irparams.rawlen = 0;
+    timerEnd(timer);
+    timerAlarmDisable(timer);
+    timerDetachInterrupt(timer);
+}
 
 //+=============================================================================
 // initialization
